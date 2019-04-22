@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<script id="vertex-shader" type="x-shader/x-vertex">
+attribute vec4 vPosition;
+attribute vec4 vNormal;
+attribute vec4 vColor;
+attribute vec2 vTexCoord;
+
+varying vec4 fColor;
+varying highp vec2 fTexCoord;
+
+uniform mat4 modelViewMatrix;
+uniform mat4 projectionMatrix;
+uniform vec4 ambientProduct, diffuseProduct, specularProduct;
+uniform vec4 lightPosition;
+uniform vec3 eyePosition;
+uniform float shininess;
+
+void main() {
+    vec3 L;
+    if(lightPosition.w == 0.0) {
+        L = normalize( lightPosition.xyz);
+    } else {
+        L = normalize( (lightPosition - vPosition) .xyz);
+    }
+    vec3 E = normalize( eyePosition);
+    vec3 H = normalize( L + E );
+    vec3 N = normalize(vNormal.xyz);
+    vec4 ambient = ambientProduct;
+    float Kd = max( dot(L, N), 0.0 );
+    vec4  diffuse = Kd*diffuseProduct;
+    float Ks = pow( max(dot(N, H), 0.0), shininess );
+    vec4  specular = Ks * specularProduct;
+    if( dot(L, N) < 0.0 ) {
+	    specular = vec4(0.0, 0.0, 0.0, 1.0);
+    }
+
+    gl_Position = projectionMatrix * modelViewMatrix * vPosition;
+    //gl_Position = vPosition;
+    fTexCoord = vTexCoord;
+    fColor = ambient + diffuse +specular;
+    fColor.a = 1.0;
+}
+</script>
+
+<script id="fragment-shader" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 fColor;
+
+varying vec2 fTexCoord;
+uniform sampler2D uSampler;
+
+//fColor ambient
+void main() {
+    gl_FragColor = fColor * texture2D(uSampler, fTexCoord);
+}
+</script>
+
+<head>
+    <title> Origami </title>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="origami.css">
+    <script type="text/javascript" src="webgl-utils.js"></script>
+    <script type="text/javascript" src="initShaders.js"></script>
+    <script type="text/javascript" src="MV.js"></script>
+    <script type="text/javascript" src="Colors.js"></script>
+    <script type="text/javascript" src="origami.js"></script>
+</head>
+<body>
+<div class="header">
+    <div class="logo">
+        <a>Origami</a>
+    </div>
+</div>
+<div class="wrapper-ver">
+    <div class="wrapper">
+        <div class="parent">
+            <canvas id="gl-canvas" width="1000" height="1000" oncontextmenu="return false;">
+                Oops ... your browser doesn't support the HTML5 canvas element
+            </canvas>
+        </div>
+        <div>
+            <button id="start">start</button>
+            <button id="next">next</button>
+        </div>
+    </div>
+</div>
+<img id = "texImage" src = "paper.jpg" hidden></img>
+</body>
+</html>
