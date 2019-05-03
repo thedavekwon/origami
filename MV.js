@@ -453,6 +453,10 @@ function lookAt( eye, at, up )
     var n = normalize( cross(v, up) );       // perpendicular vector
     var u = normalize( cross(n, v) );        // "new" up vector
 
+    console.log(v);
+    console.log(n);
+    console.log(u)
+    
     v = negate( v );
 
     var result = mat4(

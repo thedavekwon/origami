@@ -9,6 +9,7 @@ let paper;
 let vColor;
 let vPosition;
 let vTexCoord;
+let vNormal;
 
 let projectionMatrix = mat4();
 let modelViewMatrix = mat4();
@@ -55,15 +56,15 @@ let CANVAS_Y_OFFSET;
 const paperIndices = [];
 
 // lighting
-const lightPosition = vec4(1.0, 1.0, 0, 0.0);
-const lightAmbient = vec4(1.0, 1.0, 1.0, 1.0);
-const lightDiffuse = vec4(0, 0, 0, 1.0);
-const lightSpecular = vec4(0, 0, 0, 1.0);
+const lightPosition = vec4(1.0, 1.0, 1.0, 1.0 );
+const lightAmbient = vec4(1.0, 1.0, 1.0, 1.0 );
+const lightDiffuse = vec4( 1.0, 1.0, 1.0, 1.0 );
+const lightSpecular = vec4( 1.0, 1.0, 1.0, 1.0 );
 
-const materialAmbient = vec4(1.0, 1.0, 1.0, 1.0);
-const materialDiffuse = vec4(0, 0, 0.0, 1.0);
-const materialSpecular = vec4(0, 0, 0, 1.0);
-const materialShininess = 1.0;
+const materialAmbient = vec4( 1.0, 1.0, 1.0, 1.0 );
+const materialDiffuse = vec4( 0.0, 0.0, 0.0, 1.0 );
+const materialSpecular = vec4( 0.0, 0.0, 0.0, 1.0 );
+const shininess = 1.0;
 
 window.onload = function init() {
     // webgl initialization
@@ -106,11 +107,14 @@ window.onload = function init() {
     vPosition = gl.getAttribLocation(program, "vPosition");
     gl.enableVertexAttribArray(vPosition);
 
-    vColor = gl.getAttribLocation(program, "vColor");
-    gl.enableVertexAttribArray(vColor);
+    // vColor = gl.getAttribLocation(program, "vColor");
+    // gl.enableVertexAttribArray(vColor);
 
     vTexCoord = gl.getAttribLocation(program, "vTexCoord");
     gl.enableVertexAttribArray(vTexCoord);
+
+    vNormal = gl.getAttribLocation( program, "vNormal" );
+    gl.enableVertexAttribArray( vNormal);
 
     // Light
     const ambientProduct = mult(lightAmbient, materialAmbient);
@@ -121,7 +125,7 @@ window.onload = function init() {
     gl.uniform4fv(gl.getUniformLocation(program, "diffuseProduct"), flatten(diffuseProduct));
     gl.uniform4fv(gl.getUniformLocation(program, "specularProduct"), flatten(specularProduct));
     gl.uniform4fv(gl.getUniformLocation(program, "lightPosition"), flatten(lightPosition));
-    gl.uniform1f(gl.getUniformLocation(program, "shininess"), materialShininess);
+    gl.uniform1f(gl.getUniformLocation(program, "shininess"), shininess);
 
     paper = new Paper();
 
@@ -146,6 +150,7 @@ function render() {
                         rotateStep = false;
                         rotateTheta = 0;
                         rotateIdx++;
+                        // paper.rotateAxis(...queue[0]);
                         queue.shift();
                     }
                 }
@@ -167,6 +172,7 @@ function render() {
             rotateStep = false;
             rotateTheta = 0;
             rotateIdx++;
+            // paper.rotateAxis(...queue[0]);
             queue.shift();
         }
     }
@@ -192,6 +198,7 @@ class Paper {
         this.paperEdgesColorBUffer = null;
 
         this.paperTextureBuffer = null;
+        this.paperNormalBuffer = null;
 
         this.paperVertices = [];
         this.paperColors = [];
@@ -199,6 +206,8 @@ class Paper {
 
         this.paperEdgesVertices = [];
         this.paperEdgesColors = [];
+
+        this.paperNormalVertices = [];
 
         // array of mini-cubes
         this.parts = [];
@@ -264,7 +273,7 @@ class Paper {
 
         queue.push([[0, 1], 2, 0, false, 180]);
         queue.push([[4, 5], 6, 0, true, 180]);
-        queue.push([[0, 1, 2, 3], 7, 0, true, 178]);
+        queue.push([[0, 1, 2, 3], 7, 0, true, 180]);
         queue.push([[1, 2], 7, 1, false, 90]);
         queue.push([[5, 6], 7, 1, true, 90])
     }
@@ -343,18 +352,23 @@ class Paper {
         this.paperVerticesBuffer = gl.createBuffer();
         this.paperColorsBuffer = gl.createBuffer();
         this.paperTextureBuffer = gl.createBuffer();
+        this.paperNormalBuffer = gl.createBuffer();
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.paperVerticesBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, flatten(this.paperVertices), gl.STATIC_DRAW);
         gl.vertexAttribPointer(vPosition, 4, gl.FLOAT, false, 0, 0);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.paperColorsBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, flatten(this.paperColors), gl.STATIC_DRAW);
-        gl.vertexAttribPointer(vColor, 4, gl.FLOAT, false, 0, 0);
+        // gl.bindBuffer(gl.ARRAY_BUFFER, this.paperColorsBuffer);
+        // gl.bufferData(gl.ARRAY_BUFFER, flatten(this.paperColors), gl.STATIC_DRAW);
+        // gl.vertexAttribPointer(vColor, 4, gl.FLOAT, false, 0, 0);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.paperTextureBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, flatten(this.paperTextures), gl.STATIC_DRAW);
         gl.vertexAttribPointer(vTexCoord, 2, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer( gl.ARRAY_BUFFER, this.paperNormalBuffer);
+        gl.bufferData( gl.ARRAY_BUFFER, flatten(this.paperNormalVertices), gl.STATIC_DRAW );
+        gl.vertexAttribPointer(vNormal, 4, gl.FLOAT, false, 0, 0);
     }
 
     draw() {
@@ -453,6 +467,8 @@ class Paper {
     }
 
     rotatePrecompute(effecteds, i, idx, negative) {
+        // console.log(this.parts[i].rotationCoord);
+        // console.log(this.parts[i].rotationAxis[idx]);
         if (!negative) {
             for (let j = 0; j < effecteds.length; j++) {
                 const p = effecteds[j];
@@ -469,6 +485,41 @@ class Paper {
             }
         }
         rotateTheta = rotateTheta + 2;
+    }
+
+    rotateAxis(effecteds, i, idx, negative, angle) {
+        if (!effecteds.includes(i)) effecteds.push(i);
+        if (!negative) {
+            for (let j = 0; j < effecteds.length; j++) {
+                const p = effecteds[j];
+                const tmp = this.parts[i].rotationAxis[idx];
+                const tmpp = this.parts[i].rotationAxis[p];
+                if (tmpp == null) continue;
+                console.log(this.parts[p].rotationAxis[idx]);
+                this.parts[p].rotationAxis[idx] = mult(translate(...negate(this.parts[i].rotationCoord[this.parts[i].rotationAxis[idx]])), this.parts[p].rotationAxis[idx]);
+                console.log(this.parts[p].rotationAxis[idx]);
+                this.parts[p].rotationAxis[idx] = mult(rotate(angle, tmp.slice(0)), this.parts[p].rotationAxis[idx]);
+                console.log(this.parts[p].rotationAxis[idx]);
+                this.parts[p].rotationAxis[idx] = mult(translate(...negate(this.parts[i].rotationCoord[this.parts[i].rotationAxis[idx]])), this.parts[p].rotationAxis[idx]);
+                console.log(this.parts[p].rotationAxis[idx]);
+                this.parts[p].rotationCoord[this.parts[p].rotationAxis[idx]] = this.parts[p].rotationCoord[tmpp];
+            }
+        } else {
+            for (let j = 0; j < effecteds.length; j++) {
+                const p = effecteds[j];
+                const tmp = this.parts[i].rotationAxis[idx];
+                const tmpp = this.parts[i].rotationAxis[p];
+                if (tmpp == null) continue;
+                console.log(this.parts[p].rotationAxis[idx]);
+                this.parts[p].rotationAxis[idx] = mult(translate(...negate(this.parts[i].rotationCoord[this.parts[i].rotationAxis[idx]])), this.parts[p].rotationAxis[idx]);
+                console.log(this.parts[p].rotationAxis[idx]);
+                this.parts[p].rotationAxis[idx] = mult(rotate(angle, tmp.slice(0)), this.parts[p].rotationAxis[idx]);
+                console.log(this.parts[p].rotationAxis[idx]);
+                this.parts[p].rotationAxis[idx] = mult(translate(...negate(this.parts[i].rotationCoord[this.parts[i].rotationAxis[idx]])), this.parts[p].rotationAxis[idx]);
+                console.log(this.parts[p].rotationAxis[idx]);
+                this.parts[p].rotationCoord[this.parts[p].rotationAxis[idx]] = this.parts[p].rotationCoord[tmpp];
+            }
+        }
     }
 }
 
@@ -503,6 +554,7 @@ class Part {
         for (let i = 0; i < indices.length; ++i) {
             this.paper.paperVertices.push(indices[i]);
             this.paper.paperColors.push(this.color);
+            this.paper.paperNormalVertices.push([...indices[i], 1.0])
             switch (i) {
                 case 0:
                     this.paper.paperTextures.push(texCoord[0]);
@@ -539,6 +591,7 @@ class Part {
         const indices = [b, a, c];
         for (let i = 0; i < indices.length; ++i) {
             this.paper.paperVertices.push(indices[i]);
+            this.paper.paperNormalVertices.push([...indices[i], 1.0])
             this.paper.paperColors.push(this.color);
             // this.paper.paperTextures.push(normalizes(indices[i]));
             switch (i) {
@@ -571,11 +624,15 @@ class Part {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.paper.paperVerticesBuffer);
         gl.vertexAttribPointer(vPosition, 4, gl.FLOAT, false, 0, 0);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.paper.paperColorsBuffer);
-        gl.vertexAttribPointer(vColor, 4, gl.FLOAT, false, 0, 0);
+        // gl.bindBuffer(gl.ARRAY_BUFFER, this.paper.paperColorsBuffer);
+        // gl.vertexAttribPointer(vColor, 4, gl.FLOAT, false, 0, 0);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.paper.paperTextureBuffer);
         gl.vertexAttribPointer(vTexCoord, 2, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.paper.paperNormalBuffer);
+        gl.vertexAttribPointer(vNormal, 4, gl.FLOAT, false, 0, 0);
+
 
         gl.drawArrays(gl.TRIANGLES, paperIndices[idx], paperIndices[idx + 1] - paperIndices[idx]);
 

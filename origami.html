@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<meta charset="utf-8">
 <html lang="en">
 
 <script id="vertex-shader" type="x-shader/x-vertex">
@@ -53,13 +54,12 @@ uniform sampler2D uSampler;
 
 //fColor ambient
 void main() {
-    gl_FragColor = fColor * texture2D(uSampler, fTexCoord);
+    gl_FragColor = texture2D(uSampler, fTexCoord);
 }
 </script>
 
 <head>
     <title> Origami </title>
-    <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
