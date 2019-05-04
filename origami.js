@@ -1,18 +1,21 @@
 // Do Hyung Kwon
-
 // webGL objects
 let canvas;
 let gl;
 let program;
 let paper;
 
-let vColor;
 let vPosition;
 let vTexCoord;
 let vNormal;
 
 let projectionMatrix = mat4();
 let modelViewMatrix = mat4();
+let normalViewMatrix = mat4();
+
+let projectionUniform;
+let modelViewUniform;
+let normalViewUniform;
 
 const texCoord = [
     vec2(0, 0),
@@ -23,7 +26,7 @@ const texCoord = [
 
 // perspective view and camera
 let eye = null;
-let radius = 2.5;
+let radius = 3;
 let at = vec3(0.0, 0.0, 0.0);
 let up = vec3(0.0, 0.0, -1.0);
 let FOV = 45.0;
@@ -33,7 +36,7 @@ let far = 10000;
 let theta = radians(0);
 let phi = radians(90);
 
-const queue = [];
+let queue = [];
 
 let partIdx = 0;
 let rotateTheta = 0;
@@ -53,18 +56,18 @@ let new_y;
 let CANVAS_X_OFFSET;
 let CANVAS_Y_OFFSET;
 
-const paperIndices = [];
+let paperIndices = [];
 
 // lighting
-const lightPosition = vec4(1.0, 1.0, 1.0, 1.0 );
-const lightAmbient = vec4(1.0, 1.0, 1.0, 1.0 );
-const lightDiffuse = vec4( 1.0, 1.0, 1.0, 1.0 );
-const lightSpecular = vec4( 1.0, 1.0, 1.0, 1.0 );
+var lightPosition = vec4(0.0, 0.0, 1.0, 1.0);
+var lightAmbient = vec4(1.0, 1.0, 1.0, 1.0);
+var lightDiffuse = vec4(0.0, 0.0, 0.0, 1.0);
+var lightSpecular = vec4(0.0, 0.0, 0.0, 1.0);
 
-const materialAmbient = vec4( 1.0, 1.0, 1.0, 1.0 );
-const materialDiffuse = vec4( 0.0, 0.0, 0.0, 1.0 );
-const materialSpecular = vec4( 0.0, 0.0, 0.0, 1.0 );
-const shininess = 1.0;
+var materialAmbient = vec4(0.9, 0.9, 0.9, 1.0);
+var materialDiffuse = vec4(0.9, 0.9, 0.9, 1.0);
+var materialSpecular = vec4(0.9, 0.9, 0.9, 1.0);
+var shininess = 20.0;
 
 window.onload = function init() {
     // webgl initialization
@@ -95,6 +98,40 @@ window.onload = function init() {
     document.getElementById("next").onclick = () => {
         rotateStep = true;
     };
+    document.getElementById("cube").onclick = () => {
+        partIdx = 0;
+        queue = [];
+        paperIndices = [];
+        paper = new Paper("cube")
+    };
+    document.getElementById("plane").onclick = () => {
+        partIdx = 0;
+        queue = [];
+        paperIndices = [];
+        paper = new Paper("plane")
+    };
+    const ambient = document.getElementById("ambient");
+    ambient.oninput = () => {
+        lightAmbient = vec4(ambient.value/50.0, ambient.value/50.0, ambient.value/50.0, 1);
+    }
+    const diffusion = document.getElementById("diffusion");
+    diffusion.oninput = () => {
+        lightDiffuse = vec4(diffusion.value/50.0, diffusion.value/50.0, diffusion.value/50.0, 1);
+    }
+    const specular = document.getElementById("specular");
+    specular.oninput = () => {
+        lightSpecular = vec4(specular.value/50.0, specular.value/50.0, specular.value/50.0, 1);
+    }
+
+    document.onkeydown = (e) => {
+        e = e || window.event;
+        if (e.keyCode == '38') {
+            radius = radius - 0.1;
+        }
+        else if (e.keyCode == '40') {
+            radius = radius + 0.1;
+        }
+    }
 
     // element initialization
     canvas.addEventListener("mousedown", startRotate);
@@ -107,27 +144,13 @@ window.onload = function init() {
     vPosition = gl.getAttribLocation(program, "vPosition");
     gl.enableVertexAttribArray(vPosition);
 
-    // vColor = gl.getAttribLocation(program, "vColor");
-    // gl.enableVertexAttribArray(vColor);
-
     vTexCoord = gl.getAttribLocation(program, "vTexCoord");
     gl.enableVertexAttribArray(vTexCoord);
 
     vNormal = gl.getAttribLocation( program, "vNormal" );
     gl.enableVertexAttribArray( vNormal);
 
-    // Light
-    const ambientProduct = mult(lightAmbient, materialAmbient);
-    const diffuseProduct = mult(lightDiffuse, materialDiffuse);
-    const specularProduct = mult(lightSpecular, materialSpecular);
-
-    gl.uniform4fv(gl.getUniformLocation(program, "ambientProduct"), flatten(ambientProduct));
-    gl.uniform4fv(gl.getUniformLocation(program, "diffuseProduct"), flatten(diffuseProduct));
-    gl.uniform4fv(gl.getUniformLocation(program, "specularProduct"), flatten(specularProduct));
-    gl.uniform4fv(gl.getUniformLocation(program, "lightPosition"), flatten(lightPosition));
-    gl.uniform1f(gl.getUniformLocation(program, "shininess"), shininess);
-
-    paper = new Paper();
+    paper = new Paper("cube");
 
     render();
 };
@@ -135,26 +158,41 @@ window.onload = function init() {
 // const rotationDegree = 109;
 let rotationDegree = 90;
 
+function animate() {
+    if (queue.length) {
+        if (rotateIdx < paper.parts.length && rotateTheta <= rotationDegree && precomputed) {
+            // console.log(queue);
+            rotationDegree = queue[0][queue[0].length - 1];
+            // setTimeout(function(){  }, 50); 
+            paper.rotatePrecompute(...queue[0]);
+            if (rotateTheta >= rotationDegree) {
+                rotateStep = false;
+                rotateTheta = 0;
+                rotateIdx++;
+                // paper.rotateAxis(...queue[0]);
+                queue.shift();
+            }
+            setTimeout(animate, 3000);
+        }
+    }
+}
+
 function render() {
+    // Light
+    const ambientProduct = mult(lightAmbient, materialAmbient);
+    const diffuseProduct = mult(lightDiffuse, materialDiffuse);
+    const specularProduct = mult(lightSpecular, materialSpecular);
+    gl.uniform4fv(gl.getUniformLocation(program, "ambientProduct"), flatten(ambientProduct));
+    gl.uniform4fv(gl.getUniformLocation(program, "diffuseProduct"), flatten(diffuseProduct));
+    gl.uniform4fv(gl.getUniformLocation(program, "specularProduct"), flatten(specularProduct));
+    gl.uniform4fv(gl.getUniformLocation(program, "lightPosition"), flatten(lightPosition));
+    gl.uniform1f(gl.getUniformLocation(program, "shininess"), shininess);
     requestAnimFrame(render);
     paper.draw();
     if (rotateTheta <= rotationDegree && start) {
         if (!precomputed) paper.rotate();
         else {
-            while (queue.length) {
-                if (rotateIdx < paper.parts.length && rotateTheta <= rotationDegree && precomputed) {
-                    console.log(queue);
-                    rotationDegree = queue[0][queue[0].length - 1];
-                    paper.rotatePrecompute(...queue[0]);
-                    if (rotateTheta >= rotationDegree) {
-                        rotateStep = false;
-                        rotateTheta = 0;
-                        rotateIdx++;
-                        // paper.rotateAxis(...queue[0]);
-                        queue.shift();
-                    }
-                }
-            }
+            animate();
         }
     }
     if (rotateIdx < paper.parts.length && rotateTheta <= rotationDegree && rotateStep && !precomputed) {
@@ -189,10 +227,9 @@ function loadTexture(image) {
 }
 
 class Paper {
-    constructor() {
+    constructor(type) {
         // for rubik's cube
         this.paperVerticesBuffer = null;
-        this.paperColorsBuffer = null;
 
         this.paperEdgesBuffer = null;
         this.paperEdgesColorBUffer = null;
@@ -218,8 +255,12 @@ class Paper {
 
         this.effected = {};
 
-        this.initCube();
-        // this.initPlane();
+        if (type === "cube") {
+            this.initCube();
+        }
+        if (type === "plane") {
+            this.initPlane();
+        }
         this.initPaperBuffers();
         paperIndices.push(this.paperVertices.length);
     }
@@ -274,6 +315,7 @@ class Paper {
         queue.push([[0, 1], 2, 0, false, 180]);
         queue.push([[4, 5], 6, 0, true, 180]);
         queue.push([[0, 1, 2, 3], 7, 0, true, 180]);
+        // queue.push([[1, 2], 2, 0, false, 90]);
         queue.push([[1, 2], 7, 1, false, 90]);
         queue.push([[5, 6], 7, 1, true, 90])
     }
@@ -350,7 +392,6 @@ class Paper {
     // initialize buffers
     initPaperBuffers() {
         this.paperVerticesBuffer = gl.createBuffer();
-        this.paperColorsBuffer = gl.createBuffer();
         this.paperTextureBuffer = gl.createBuffer();
         this.paperNormalBuffer = gl.createBuffer();
 
@@ -358,17 +399,13 @@ class Paper {
         gl.bufferData(gl.ARRAY_BUFFER, flatten(this.paperVertices), gl.STATIC_DRAW);
         gl.vertexAttribPointer(vPosition, 4, gl.FLOAT, false, 0, 0);
 
-        // gl.bindBuffer(gl.ARRAY_BUFFER, this.paperColorsBuffer);
-        // gl.bufferData(gl.ARRAY_BUFFER, flatten(this.paperColors), gl.STATIC_DRAW);
-        // gl.vertexAttribPointer(vColor, 4, gl.FLOAT, false, 0, 0);
-
         gl.bindBuffer(gl.ARRAY_BUFFER, this.paperTextureBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, flatten(this.paperTextures), gl.STATIC_DRAW);
         gl.vertexAttribPointer(vTexCoord, 2, gl.FLOAT, false, 0, 0);
 
         gl.bindBuffer( gl.ARRAY_BUFFER, this.paperNormalBuffer);
         gl.bufferData( gl.ARRAY_BUFFER, flatten(this.paperNormalVertices), gl.STATIC_DRAW );
-        gl.vertexAttribPointer(vNormal, 4, gl.FLOAT, false, 0, 0);
+        gl.vertexAttribPointer(vNormal, 3, gl.FLOAT, false, 0, 0);
     }
 
     draw() {
@@ -401,11 +438,12 @@ class Paper {
         Object.keys(this.sharedEdges).forEach((edge) => {
             const e = this.sharedEdges[edge];
             const tmp = edge.split(",");
-            const axis = [parseFloat(tmp[0]) - parseFloat(tmp[4]), parseFloat(tmp[1]) - parseFloat(tmp[5]), parseFloat(tmp[2]) - parseFloat(tmp[6])];
+            const axis = [(parseFloat(tmp[0]) - parseFloat(tmp[4])).toFixed(3), (parseFloat(tmp[1]) - parseFloat(tmp[5])).toFixed(3), (parseFloat(tmp[2]) - parseFloat(tmp[6])).toFixed(3)];
             this.parts[e[1]].rotationAxis.push(axis);
-            this.parts[e[1]].rotationCoord[axis] = [parseFloat(tmp[4]), parseFloat(tmp[5]), parseFloat(tmp[6])];
-            this.parts[e[1]].rotationCoord[negate(axis)] = [parseFloat(tmp[0]), parseFloat(tmp[1]), parseFloat(tmp[2])];
-        })
+            this.parts[e[1]].rotationCoord[axis] = [parseFloat(tmp[4]).toFixed(3), parseFloat(tmp[5]).toFixed(3), parseFloat(tmp[6]).toFixed(3)];
+            this.parts[e[1]].rotationCoord[negate(axis)] = [parseFloat(tmp[0]).toFixed(3), parseFloat(tmp[1]).toFixed(3), parseFloat(tmp[2]).toFixed(3)];
+            console.log(this.parts[e[1]].rotationCoord);
+        })   
     }
 
     findAffected() {
@@ -472,6 +510,8 @@ class Paper {
         if (!negative) {
             for (let j = 0; j < effecteds.length; j++) {
                 const p = effecteds[j];
+                // console.log(this.parts[i].rotationCoord);
+                // console.log(this.parts[i].rotationAxis[idx]);
                 this.parts[p].rotationMatrix = mult(translate(...negate(this.parts[i].rotationCoord[this.parts[i].rotationAxis[idx]])), this.parts[p].rotationMatrix);
                 this.parts[p].rotationMatrix = mult(rotate(this.parts[i].rotateAngle, this.parts[i].rotationAxis[idx].slice(0)), this.parts[p].rotationMatrix);
                 this.parts[p].rotationMatrix = mult(translate(...this.parts[i].rotationCoord[this.parts[i].rotationAxis[idx]]), this.parts[p].rotationMatrix);
@@ -488,36 +528,63 @@ class Paper {
     }
 
     rotateAxis(effecteds, i, idx, negative, angle) {
+        console.log(effecteds, i, idx, negative, angle);
         if (!effecteds.includes(i)) effecteds.push(i);
         if (!negative) {
             for (let j = 0; j < effecteds.length; j++) {
                 const p = effecteds[j];
                 const tmp = this.parts[i].rotationAxis[idx];
-                const tmpp = this.parts[i].rotationAxis[p];
-                if (tmpp == null) continue;
+                const tmpp = this.parts[i].rotationAxis[idx];
+                // console.log(tmp)
+                // console.log(tmpp);
+                if (tmpp == null || tmp == null || this.parts[p].rotationAxis.length === 0) continue;
+                // console.log(this.parts[p].rotationAxis);
+                // console.log(this.parts[i].rotationCoord[this.parts[i].rotationAxis[idx]]);
+                // console.log(this.parts[p].rotationCoord);
+                const loc = this.parts[i].rotationCoord[this.parts[i].rotationAxis[idx]];
+                const rot = [parseFloat(this.parts[p].rotationAxis[idx][0]).toFixed(3),
+                             parseFloat(this.parts[p].rotationAxis[idx][1]).toFixed(3),
+                             parseFloat(this.parts[p].rotationAxis[idx][2]).toFixed(3),
+                             (0.0).toFixed(3)];
+                // console.log(loc, rot);
+                this.parts[p].rotationAxis[idx] = mult(translate(...negate(loc)), rot);
+                // console.log(this.parts[p].rotationAxis[idx]);
+                this.parts[p].rotationAxis[idx] = mult(rotate(-angle, tmp.slice(0)), rot);
+                // console.log(this.parts[p].rotationAxis[idx]);
+                this.parts[p].rotationAxis[idx] = mult(translate(...negate(loc)), rot);
+                this.parts[p].rotationAxis[idx] = this.parts[p].rotationAxis[idx].slice(0, 3);
+                // console.log(this.parts[p].rotationAxis[idx])
+                // console.log(this.parts[p].rotationAxis[idx]);
                 console.log(this.parts[p].rotationAxis[idx]);
-                this.parts[p].rotationAxis[idx] = mult(translate(...negate(this.parts[i].rotationCoord[this.parts[i].rotationAxis[idx]])), this.parts[p].rotationAxis[idx]);
-                console.log(this.parts[p].rotationAxis[idx]);
-                this.parts[p].rotationAxis[idx] = mult(rotate(angle, tmp.slice(0)), this.parts[p].rotationAxis[idx]);
-                console.log(this.parts[p].rotationAxis[idx]);
-                this.parts[p].rotationAxis[idx] = mult(translate(...negate(this.parts[i].rotationCoord[this.parts[i].rotationAxis[idx]])), this.parts[p].rotationAxis[idx]);
-                console.log(this.parts[p].rotationAxis[idx]);
-                this.parts[p].rotationCoord[this.parts[p].rotationAxis[idx]] = this.parts[p].rotationCoord[tmpp];
+                console.log(tmpp);
+                console.log(this.parts[p].rotationCoord[tmpp]);
+                this.parts[p].rotationCoord[tmpp] = this.parts[p].rotationCoord[this.parts[p].rotationAxis[idx]];
+                console.log(this.parts[p].rotationCoord);
             }
         } else {
             for (let j = 0; j < effecteds.length; j++) {
                 const p = effecteds[j];
                 const tmp = this.parts[i].rotationAxis[idx];
-                const tmpp = this.parts[i].rotationAxis[p];
-                if (tmpp == null) continue;
-                console.log(this.parts[p].rotationAxis[idx]);
-                this.parts[p].rotationAxis[idx] = mult(translate(...negate(this.parts[i].rotationCoord[this.parts[i].rotationAxis[idx]])), this.parts[p].rotationAxis[idx]);
-                console.log(this.parts[p].rotationAxis[idx]);
-                this.parts[p].rotationAxis[idx] = mult(rotate(angle, tmp.slice(0)), this.parts[p].rotationAxis[idx]);
-                console.log(this.parts[p].rotationAxis[idx]);
-                this.parts[p].rotationAxis[idx] = mult(translate(...negate(this.parts[i].rotationCoord[this.parts[i].rotationAxis[idx]])), this.parts[p].rotationAxis[idx]);
-                console.log(this.parts[p].rotationAxis[idx]);
-                this.parts[p].rotationCoord[this.parts[p].rotationAxis[idx]] = this.parts[p].rotationCoord[tmpp];
+                const tmpp = this.parts[i].rotationAxis[idx];
+                if (tmpp == null || tmp == null || this.parts[p].rotationAxis.length === 0) continue;
+                // console.log(this.parts[p].rotationAxis);
+                // console.log(this.parts[i].rotationCoord[this.parts[i].rotationAxis[idx]]);
+                const loc = this.parts[i].rotationCoord[this.parts[i].rotationAxis[idx]];
+                const rot = [parseFloat(this.parts[p].rotationAxis[idx][0]).toFixed(3),
+                             parseFloat(this.parts[p].rotationAxis[idx][1]).toFixed(3),
+                             parseFloat(this.parts[p].rotationAxis[idx][2]).toFixed(3),
+                             (0.0).toFixed(3)];
+                // console.log(loc, rot);
+                this.parts[p].rotationAxis[idx] = mult(translate(...negate(loc)), rot);
+                // console.log(this.parts[p].rotationAxis[idx]);
+                this.parts[p].rotationAxis[idx] = mult(rotate(angle, tmp.slice(0)), rot);
+                // console.log(this.parts[p].rotationAxis[idx]);
+                this.parts[p].rotationAxis[idx] = mult(translate(...negate(loc)), rot);
+                this.parts[p].rotationAxis[idx] = this.parts[p].rotationAxis[idx].slice(0, 3);
+                console.log(this.parts[p].rotationAxis[idx])
+                // console.log(this.parts[p].rotationAxis[idx]);
+                this.parts[p].rotationCoord[tmpp] = this.parts[p].rotationCoord[this.parts[p].rotationAxis[idx]];
+
             }
         }
     }
@@ -554,7 +621,7 @@ class Part {
         for (let i = 0; i < indices.length; ++i) {
             this.paper.paperVertices.push(indices[i]);
             this.paper.paperColors.push(this.color);
-            this.paper.paperNormalVertices.push([...indices[i], 1.0])
+            this.paper.paperNormalVertices.push([0, 0, 1])
             switch (i) {
                 case 0:
                     this.paper.paperTextures.push(texCoord[0]);
@@ -589,11 +656,17 @@ class Part {
 
     triangle(a, b, c) {
         const indices = [b, a, c];
+        const t1 = subtract(b, a);
+        const t2 = subtract(c, a);
+        let normal = normalize(cross(t2, t1));
+        normal = vec4(normal);
+        normal[3]  = 0.0;
         for (let i = 0; i < indices.length; ++i) {
             this.paper.paperVertices.push(indices[i]);
-            this.paper.paperNormalVertices.push([...indices[i], 1.0])
+            // this.paper.paperNormalVertices.push([...indices[i], 1.0])
             this.paper.paperColors.push(this.color);
-            // this.paper.paperTextures.push(normalizes(indices[i]));
+            // this.paper.paperTextures.push(normalize(indices[i]));
+            this.paper.paperNormalVertices.push([0, 0, 1, 1])
             switch (i) {
                 case 0:
                     this.paper.paperTextures.push(texCoord[1]);
@@ -614,24 +687,27 @@ class Part {
                 this.paper.edges[i] = [partIdx];
             }
         })
+        
     }
 
     draw(idx) {
         let mvMatrix = modelViewMatrix;
         this.transform();
+        normalViewMatrix = [
+            vec3(modelViewMatrix[0][0], modelViewMatrix[0][1], modelViewMatrix[0][2]),
+            vec3(modelViewMatrix[1][0], modelViewMatrix[1][1], modelViewMatrix[1][2]),
+            vec3(modelViewMatrix[2][0], modelViewMatrix[2][1], modelViewMatrix[2][2])
+        ];
         setMatrixToProgram();
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.paper.paperVerticesBuffer);
         gl.vertexAttribPointer(vPosition, 4, gl.FLOAT, false, 0, 0);
 
-        // gl.bindBuffer(gl.ARRAY_BUFFER, this.paper.paperColorsBuffer);
-        // gl.vertexAttribPointer(vColor, 4, gl.FLOAT, false, 0, 0);
-
         gl.bindBuffer(gl.ARRAY_BUFFER, this.paper.paperTextureBuffer);
         gl.vertexAttribPointer(vTexCoord, 2, gl.FLOAT, false, 0, 0);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.paper.paperNormalBuffer);
-        gl.vertexAttribPointer(vNormal, 4, gl.FLOAT, false, 0, 0);
+        gl.vertexAttribPointer(vNormal, 3, gl.FLOAT, false, 0, 0);
 
 
         gl.drawArrays(gl.TRIANGLES, paperIndices[idx], paperIndices[idx + 1] - paperIndices[idx]);
@@ -642,10 +718,12 @@ class Part {
 
 
 function setMatrixToProgram() {
-    const projectionUniform = gl.getUniformLocation(program, "projectionMatrix");
+    projectionUniform = gl.getUniformLocation(program, "projectionMatrix");
     gl.uniformMatrix4fv(projectionUniform, false, flatten(projectionMatrix));
-    const modelViewUniform = gl.getUniformLocation(program, "modelViewMatrix");
+    modelViewUniform = gl.getUniformLocation(program, "modelViewMatrix");
     gl.uniformMatrix4fv(modelViewUniform, false, flatten(modelViewMatrix));
+    normalViewUniform = gl.getUniformLocation(program, "normalViewMatrix");
+    gl.uniformMatrix3fv(normalViewUniform, false, flatten(normalViewMatrix));
 }
 
 // right mouse to rotate the cube, and left mouse to turn the cube

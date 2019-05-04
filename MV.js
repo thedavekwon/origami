@@ -278,6 +278,8 @@ function mult( u, v )
 
     if ( u.matrix && v.matrix ) {
         if ( u.length != v.length ) {
+            console.log(u)
+            console.log(v);
             throw "mult(): trying to add matrices of different dimensions";
         }
 
@@ -452,10 +454,6 @@ function lookAt( eye, at, up )
     var v = normalize( subtract(at, eye) );  // view direction vector
     var n = normalize( cross(v, up) );       // perpendicular vector
     var u = normalize( cross(n, v) );        // "new" up vector
-
-    console.log(v);
-    console.log(n);
-    console.log(u)
     
     v = negate( v );
 
