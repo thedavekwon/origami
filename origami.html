@@ -92,24 +92,29 @@ void main()
             </canvas>
         </div>
         <div>
+            <h1>
+                Click Button to Fold
+                <br/>
+                Arrow Key to Adjust Size
+            </h1>
             <div class="slidecontainer">
                 <text>Ambient</text>
                 </br>
-                <input type="range" min="1" max="50" value="45" class="slider" id="ambient">
+                <input type="range" min="0" max="50" value="50" class="slider" id="ambient">
                 </br>
                 <text>Diffusion</text>
                 </br>
-                <input type="range" min="1" max="50" value="5" class="slider" id="diffusion">
+                <input type="range" min="0" max="50" value="5" class="slider" id="diffusion">
                 </br>
                 <text>Specular</text>
                 </br>
-                <input type="range" min="1" max="50" value="0" class="slider" id="specular">
+                <input type="range" min="0" max="50" value="0" class="slider" id="specular">
             </div>
             <br/>
             <button id="cube">cube</button>
             <button id="plane">plane</button>
-            <button id="start">start</button>
-            <button id="next">next</button>
+            <button id="start">Animate</button>
+            <button id="next">Step</button>
         </div>
     </div>
 </div>
